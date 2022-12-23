@@ -1,0 +1,12 @@
+[tool.black]
+exclude = '''
+(
+  /(
+    | .+/integration_template
+  )/
+)
+'''
+
+[tool.isort]
+profile = "black"
+skip_glob = "*/integration_template/*"
