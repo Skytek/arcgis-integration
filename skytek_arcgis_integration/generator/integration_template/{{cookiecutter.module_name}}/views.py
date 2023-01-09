@@ -17,7 +17,7 @@ class {{ cookiecutter.model_name }}ApiView(MapFeaturesBaseView):
     def get_items(self, viewport: ViewPort, params: dict):
         queryset = models.{{ cookiecutter.model_name }}.objects.all()
         if viewport:
-            queryset = queryset.filter(polygon__intersects=viewport.to_polygon().wkt)
+            queryset = queryset.filter({{ cookiecutter.specs.model_geometry_field.model_field_name }}__intersects=viewport.to_polygon().wkt)
 
         # @TODO add filtering by params
 
