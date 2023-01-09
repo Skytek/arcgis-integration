@@ -1,0 +1,2 @@
+skytek-generic-map-api>=0.4.0
+cookiecutter>=2.1.0
