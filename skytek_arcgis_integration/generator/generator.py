@@ -39,9 +39,6 @@ def generate_django_module(  # pylint: disable=too-many-locals,too-many-branches
     client = ArcGisClient(base_layer_url)
     info = client.get_info()
 
-    if info.get("type") != "Feature Layer":
-        raise ValueError("Unsupported arcgis layer")
-
     template_data = TemplateData.from_arcgis_info(info)
 
     template_directory = path.join(path.dirname(__file__), "integration_template")
@@ -110,7 +107,17 @@ TYPE_MAPPING = {
 }
 
 
+def replace_all(value, search_list, replacement):
+    for search in search_list:
+        value = value.replace(search, replacement)
+    return value
+
+
+NAME_UNFRIENDLY_CHARS = "/+=-@#$%&*\\|()[]"
+
+
 def make_python_style_variable_name(name):
+    name = replace_all(name, NAME_UNFRIENDLY_CHARS, "_")
     output = ""
     for previous_letter, letter in zip("_" + name, name):
         if letter == "_" and output[-1:] == "_":
@@ -127,6 +134,7 @@ def make_python_style_variable_name(name):
 
 
 def make_python_style_class_name(name):
+    name = replace_all(name, NAME_UNFRIENDLY_CHARS, "_")
     output = ""
     for previous_letter, letter in zip("_" + name, name):
         if letter in string.ascii_letters + string.digits:
@@ -179,7 +187,9 @@ class TemplateData:
             "esriGeometryMultipoint": "MultiPointField",
             "esriGeometryPolygon": "MultiPolygonField",
         }
-        model_field_type = field_mapping.get(info_dict["geometryType"], "GeometryField")
+        model_field_type = field_mapping.get(
+            info_dict.get("geometryType", None), "GeometryField"
+        )
         return Field(
             api_field="",
             model_field_name="geometry",
