@@ -33,8 +33,7 @@ class ArcGisClient:
         self.timeout = timeout
 
     def get_feature_list(self, bounding_polygon: Optional[Polygon] = None, params=None):
-        if params is None:
-            params = {}
+        params = params or {}
         url = self.base_layer_url + "/query"
 
         if self.add_dummy_where and "where" not in params:
@@ -59,6 +58,18 @@ class ArcGisClient:
         url = self.base_layer_url
         return self._do_request(url, format="json")
 
+    def export_raster_image(self, bounding_polygon: Polygon, params=None):
+        params = params or {}
+        url = self.base_layer_url + "/export"
+
+        params = {
+            "imageSR": WGS84,
+            "transparent": "true",
+            **params,
+            **self._geometry_params_for_raster(bounding_polygon),
+        }
+        return self._do_request(url, params)
+
     def _geometry_params(self, bounding_polygon: Polygon, params=None):
         params = params or {}
         params = {
@@ -67,6 +78,13 @@ class ArcGisClient:
             "geometryType": "esriGeometryEnvelope",
             "inSR": WGS84,
             "spatialRel": "esriSpatialRelIntersects",
+        }
+        return params
+
+    def _geometry_params_for_raster(self, bounding_polygon: Polygon):
+        params = {
+            "bbox": ",".join(map(str, bounding_polygon.bounds)),
+            "bboxSR": WGS84,
         }
         return params
 

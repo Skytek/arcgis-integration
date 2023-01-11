@@ -5,6 +5,7 @@ from generic_map_api.views import MapFeaturesBaseView, ViewPort
 
 from . import serializers
 from .client import ArcGisClient
+from .utils import divide_rectangle
 
 
 class ParametrizedArcGisView(MapFeaturesBaseView):
@@ -47,6 +48,28 @@ class AdHocBaseArcGisView(MapFeaturesBaseView):
         return arc_gis.get_feature(item_id)
 
 
+class RasterAdHocBaseArcGisView(MapFeaturesBaseView):
+    display_name = "ArcGis Raster"
+    serializer = serializers.AdHocBaseArcGisSerializer()
+
+    layer_url = None
+
+    def get_items(self, viewport: ViewPort, params: dict):
+        layer_url = self.layer_url
+        arc_gis = ArcGisClient(layer_url)
+        arc_gis.format = "json"
+
+        params = {
+            "size": "512,512",
+        }
+        for rect in divide_rectangle(viewport.to_polygon(), (5, 4)):
+            response = arc_gis.export_raster_image(rect, params=params)
+            yield response
+
+    def get_item(self, item_id):
+        return {}
+
+
 def arcgis_view_factory(layer_url, feature_type=None, display_name=None):
     feature_type = feature_type or serializers.AdHocBaseArcGisSerializer.feature_type
     display_name = display_name or AdHocBaseArcGisView.display_name
@@ -57,6 +80,27 @@ def arcgis_view_factory(layer_url, feature_type=None, display_name=None):
     AdHocSerializer.feature_type = feature_type
 
     class AdHocView(AdHocBaseArcGisView):  # pylint: disable=too-many-ancestors
+        pass
+
+    AdHocView.layer_url = layer_url
+    AdHocView.serializer = AdHocSerializer()
+    AdHocView.display_name = display_name
+
+    return AdHocView
+
+
+def arcgis_raster_view_factory(layer_url, feature_type=None, display_name=None):
+    feature_type = (
+        feature_type or serializers.RasterAdHocBaseArcGisSerializer.feature_type
+    )
+    display_name = display_name or RasterAdHocBaseArcGisView.display_name
+
+    class AdHocSerializer(serializers.RasterAdHocBaseArcGisSerializer):
+        pass
+
+    AdHocSerializer.feature_type = feature_type
+
+    class AdHocView(RasterAdHocBaseArcGisView):  # pylint: disable=too-many-ancestors
         pass
 
     AdHocView.layer_url = layer_url

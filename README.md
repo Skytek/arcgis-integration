@@ -53,6 +53,14 @@ router.register("arc-gis-fires", fires_view, basename="arc-gis-fires")
 urlpatterns += router.urls
 ```
 
+Note: For raster map endpoints (url ends with `/MapServer`) use `arcgis_raster_view_factory` function instead:
+
+```python
+from skytek_arcgis_integration.views import arcgis_raster_view_factory
+population_view = arcgis_raster_view_factory("https://ciesin.columbia.edu/arcgis/rest/services/ciesin/popgrid_counts/MapServer/")
+```
+
+
 ## Usage: generated integration with storage
 
 This method generates a separate, ready to use django application. It contains api client, celery tasks, storage models, view with serializer and django admin page.
@@ -97,3 +105,17 @@ urlpatterns = [
     path("fh_perimeters/", include("arcgis.fh_perimeters.urls")),
 ]
 ```
+
+
+## Appendix: Interesting data sources
+
+### Feature layers
+
+- Wild land fire perimeters: https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/Current_WildlandFire_Perimeters/FeatureServer/0/
+- Water flow gauges: https://services9.arcgis.com/RHVPKKiFTONKtxq3/ArcGIS/rest/services/Live_Stream_Gauges_v1/FeatureServer/0/
+- USA Flood hazard areas: https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Flood_Hazard_Reduced_Set_gdb/FeatureServer/0/
+
+### Raster maps
+
+- World population density: https://ciesin.columbia.edu/arcgis/rest/services/ciesin/popgrid_counts/MapServer/
+- NOAA Warnings: https://nowcoast.noaa.gov/arcgis/rest/services/nowcoast/wwa_meteoceanhydro_longduration_hazards_time/MapServer/

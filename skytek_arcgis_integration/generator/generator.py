@@ -1,70 +1,54 @@
-import string
-from dataclasses import asdict, dataclass
 from os import path
-from typing import List, Optional
 
 from cookiecutter.main import cookiecutter
 from django.conf import settings
 
 from skytek_arcgis_integration.client import ArcGisClient
 
+from .feature_layer_generator import generate_feature_layer_django_module
+from .raster_layer_generator import generate_raster_layer_django_module
+from .utils import (
+    ask_user,
+    make_python_style_class_name,
+    make_python_style_variable_name,
+)
 
-def ask_user(prompt, default=None):
-    if default:
-        message = f"{prompt} [{default}]: "
-    else:
-        message = f"{prompt}: "
-
-    raw_value = input(message)
-    if default and raw_value == "":
-        raw_value = default
-    return raw_value
+LAYER_TYPE_MAP = {
+    "Feature Layer": generate_feature_layer_django_module,
+    "Raster Layer": generate_raster_layer_django_module,
+}
 
 
-def generate_django_module(  # pylint: disable=too-many-locals,too-many-branches
-    base_layer_url=None,
-    module_path=None,
-    model_name=None,
-    celery_app_path=None,
-    interactive=True,
-):
-    given_base_layer_url = base_layer_url
-    given_module_path = module_path
-    given_model_name = model_name
-    given_celery_app_path = celery_app_path
-
-    if interactive and not given_base_layer_url:
-        base_layer_url = ask_user("Enter base layer_url")
-
-    client = ArcGisClient(base_layer_url)
-    info = client.get_info()
-
-    template_data = TemplateData.from_arcgis_info(info)
-
-    template_directory = path.join(path.dirname(__file__), "integration_template")
-    main_django_app_module = ".".join(settings.SETTINGS_MODULE.split(".")[:-1])
-
+def _get_full_module_name(layer_name, given_module_path, interactive):
     if given_module_path:
         module_name = given_module_path.split(".")[-1]
         full_module_name = given_module_path
     else:
-        module_name = make_python_style_variable_name(info["name"])
+        module_name = make_python_style_variable_name(layer_name)
         if module_name[-1] != "s":
             module_name += "s"
         full_module_name = f"arcgis.{module_name}"
 
         if interactive:
             full_module_name = ask_user("Enter full module path", full_module_name)
+    return full_module_name
 
+
+def _get_model_name(layer_name, given_model_name, interactive):
     if given_model_name:
         model_name = given_model_name
     else:
-        model_name = make_python_style_class_name(info["name"])
+        model_name = make_python_style_class_name(layer_name)
         if model_name[-1].lower() == "s":
             model_name = model_name[:-1]
 
         if interactive:
             model_name = ask_user("Enter model name", model_name)
+    return model_name
+
+
+def _get_celery_app(given_celery_app_path, interactive):
+    main_django_app_module = ".".join(settings.SETTINGS_MODULE.split(".")[:-1])
 
     if given_celery_app_path:
         celery_app = given_celery_app_path
@@ -73,172 +57,73 @@ def generate_django_module(  # pylint: disable=too-many-locals,too-many-branches
 
         if interactive:
             celery_app = ask_user("Enter celery app path", celery_app)
+    return celery_app
 
-    output_directory = path.join(settings.BASE_DIR, *full_module_name.split(".")[:-1])
-    module_name = full_module_name.split(".")[-1]
+
+def _get_layer_type(base_layer_url, info):
+    layer_type = info.get("type")
+    if not layer_type and (
+        base_layer_url.endswith("/MapServer/") or base_layer_url.endswith("/MapServer")
+    ):
+        layer_type = "Raster Layer"
+
+    if layer_type not in LAYER_TYPE_MAP:
+        raise ValueError(f"Unsupported arcgis layer ({layer_type})")
+
+    return layer_type
+
+
+def _get_module_directory(full_module_name):
+    return path.join(settings.BASE_DIR, *full_module_name.split("."))
+
+
+def _get_output_directory(full_module_name):
+    return path.join(settings.BASE_DIR, *full_module_name.split(".")[:-1])
+
+
+def _get_top_module_name(full_module_name):
+    return full_module_name.split(".")[-1]
+
+
+def _get_template_directory(template_name):
+    return path.join(path.dirname(__file__), "templates", template_name)
+
+
+def generate_django_module(
+    base_layer_url=None,
+    module_path=None,
+    model_name=None,
+    celery_app_path=None,
+    interactive=True,
+):
+    if interactive and not base_layer_url:
+        base_layer_url = ask_user("Enter base layer_url")
+
+    client = ArcGisClient(base_layer_url)
+    info = client.get_info()
+
+    layer_type = _get_layer_type(base_layer_url, info)
+
+    layer_name = info.get("name") or info.get("mapName")
+    full_module_name = _get_full_module_name(layer_name, module_path, interactive)
+    model_name = _get_model_name(layer_name, model_name, interactive)
+    celery_app = _get_celery_app(celery_app_path, interactive)
+
+    template_name, extra_context = LAYER_TYPE_MAP[layer_type](info=info)
+
     extra_context = {
-        "module_name": module_name,
+        "module_name": _get_top_module_name(full_module_name),
         "model_name": model_name,
         "celery_app": celery_app,
         "base_layer_url": base_layer_url,
-        "specs": template_data.to_dict(),
+        **extra_context,
     }
 
     cookiecutter(
-        template=template_directory,
-        output_dir=output_directory,
+        template=_get_template_directory(template_name),
+        output_dir=_get_output_directory(full_module_name),
         extra_context=extra_context,
         no_input=True,
     )
 
-    full_output_directory = path.join(settings.BASE_DIR, *full_module_name.split("."))
-
-    return full_output_directory, full_module_name
-
-
-TYPE_MAPPING = {
-    "esriFieldTypeOID": "IntegerField",
-    "esriFieldTypeSmallInteger": "IntegerField",
-    "esriFieldTypeInteger": "IntegerField",
-    "esriFieldTypeDate": "DateTimeField",
-    "esriFieldTypeSingle": "FloatField",
-    "esriFieldTypeDouble": "FloatField",
-    "esriFieldTypeString": "CharField",
-}
-
-
-def replace_all(value, search_list, replacement):
-    for search in search_list:
-        value = value.replace(search, replacement)
-    return value
-
-
-NAME_UNFRIENDLY_CHARS = "/+=-@#$%&*\\|()[]"
-
-
-def make_python_style_variable_name(name):
-    name = replace_all(name, NAME_UNFRIENDLY_CHARS, "_")
-    output = ""
-    for previous_letter, letter in zip("_" + name, name):
-        if letter == "_" and output[-1:] == "_":
-            continue
-
-        if (
-            letter in string.ascii_uppercase
-            and previous_letter in string.ascii_lowercase
-        ):
-            output += "_"
-
-        output += letter.lower()
-    return output
-
-
-def make_python_style_class_name(name):
-    name = replace_all(name, NAME_UNFRIENDLY_CHARS, "_")
-    output = ""
-    for previous_letter, letter in zip("_" + name, name):
-        if letter in string.ascii_letters + string.digits:
-            if previous_letter not in string.ascii_letters:
-                output += letter.upper()
-            else:
-                output += letter.lower()
-
-    return output
-
-
-@dataclass
-class TemplateData:
-    srid: int
-    object_id_field: str
-    object_id_field_in_model: str
-
-    model_geometry_field: "Field"
-    model_fields: List["Field"]
-
-    def to_dict(self):
-        return asdict(self)
-
-    @classmethod
-    def from_arcgis_info(cls, info_dict):
-        model_geometry_field = cls.make_geometry_field(info_dict)
-        model_fields = {
-            field.api_field: field
-            for field in [
-                Field.from_esri_field(arcgis_field)
-                for arcgis_field in info_dict["fields"]
-            ]
-            if field is not None
-        }
-
-        return cls(
-            srid=info_dict["extent"]["spatialReference"]["wkid"],
-            object_id_field=info_dict["objectIdField"],
-            object_id_field_in_model=make_python_style_variable_name(
-                info_dict["objectIdField"]
-            ),
-            model_geometry_field=model_geometry_field,
-            model_fields=model_fields,
-        )
-
-    @classmethod
-    def make_geometry_field(cls, info_dict):
-        field_mapping = {
-            "esriGeometryPoint": "PointField",
-            "esriGeometryMultipoint": "MultiPointField",
-            "esriGeometryPolygon": "MultiPolygonField",
-        }
-        model_field_type = field_mapping.get(
-            info_dict.get("geometryType", None), "GeometryField"
-        )
-        return Field(
-            api_field="",
-            model_field_name="geometry",
-            model_field_type=model_field_type,
-            model_field_kwargs={"null": False},
-        )
-
-
-@dataclass
-class Field:
-    api_field: str
-    model_field_name: str
-    model_field_type: str
-    model_field_kwargs: dict
-
-    @classmethod
-    def from_esri_field(cls, field_dict) -> Optional["Field"]:
-        api_field = field_dict["name"]
-        field_name = cls._transform_name(field_dict)
-        field_type = cls._transform_type(field_dict)
-        field_kwargs = cls._create_field_kwargs(field_dict)
-
-        return cls(api_field, field_name, field_type, field_kwargs)
-
-    @staticmethod
-    def _transform_name(field_dict):
-        name = field_dict["name"]
-        name = make_python_style_variable_name(name)
-        return name
-
-    @staticmethod
-    def _transform_type(field_dict):
-        field_type = field_dict["type"]
-        return TYPE_MAPPING.get(field_type, "CharField")
-
-    @staticmethod
-    def _create_field_kwargs(field_dict):
-        kwargs = {}
-
-        if "nullable" in field_dict and field_dict["nullable"]:
-            kwargs["null"] = True
-
-        if "alias" in field_dict and field_dict["alias"]:
-            kwargs["verbose_name"] = field_dict["alias"]
-
-        if field_dict["type"] == "esriFieldTypeString":
-            kwargs["max_length"] = field_dict["length"]
-
-        if field_dict["type"] not in TYPE_MAPPING:
-            kwargs["max_length"] = 255
-
-        return kwargs
+    return _get_module_directory(full_module_name), full_module_name

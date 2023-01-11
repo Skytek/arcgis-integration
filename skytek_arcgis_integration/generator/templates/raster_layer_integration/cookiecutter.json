@@ -1,0 +1,10 @@
+{
+    "module_name": "",
+    "model_name": "",
+    "celery_app": "",
+    "base_layer_url": "",
+
+    "specs": null,
+
+    "_extensions": ["skytek_arcgis_integration.generator.jinja_extensions.GeneratorExtension"]
+}

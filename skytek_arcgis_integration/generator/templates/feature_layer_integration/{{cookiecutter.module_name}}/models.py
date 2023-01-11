@@ -8,6 +8,7 @@ from skytek_arcgis_integration import utils
 
 
 class {{ cookiecutter.model_name }}(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
     {{ cookiecutter.specs.model_geometry_field.model_field_name }} = gis_models.{{ cookiecutter.specs.model_geometry_field.model_field_type }}(
         {{ cookiecutter.specs.model_geometry_field.model_field_kwargs | kwargs }}
     )
@@ -34,7 +35,7 @@ class {{ cookiecutter.model_name }}(models.Model):
         geojson_geometry = json.dumps(payload["geometry"])
         properties = payload["properties"]
         obj = cls(
-            {{ cookiecutter.specs.model_geometry_field.model_field_name }}=utils.ensure_geometry(GEOSGeometry(geojson_geometry, srid={{ cookiecutter.specs.srid }}), cls.{{ cookiecutter.specs.model_geometry_field.model_field_name }}.field.geom_class),
+            {{ cookiecutter.specs.model_geometry_field.model_field_name }}=utils.ensure_geometry(GEOSGeometry(geojson_geometry), cls.{{ cookiecutter.specs.model_geometry_field.model_field_name }}.field.geom_class),
 {% for api_field in cookiecutter.specs.model_fields %}
             {%- set field = cookiecutter.specs.model_fields[api_field] -%}
 {% if field.model_field_type == "DateTimeField" %}

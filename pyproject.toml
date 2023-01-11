@@ -2,11 +2,11 @@
 exclude = '''
 (
   /(
-    | .+/integration_template
+    | .+/generator/templates
   )/
 )
 '''
 
 [tool.isort]
 profile = "black"
-skip_glob = "*/integration_template/*"
+skip_glob = "*/generator/templates/*"
