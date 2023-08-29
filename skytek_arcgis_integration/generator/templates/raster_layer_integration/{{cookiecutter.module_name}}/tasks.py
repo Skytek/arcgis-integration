@@ -2,6 +2,7 @@
 {%- set celery_app = cookiecutter.celery_app.split(".")[-1] -%}
 from {{ celery_app_module }} import {{ celery_app }}{% if celery_app != "app" %} as app{% endif %}
 from . import models
+from . import queues
 from skytek_arcgis_integration.client import ArcGisClient, WGS84
 from skytek_arcgis_integration.utils import float_range
 from shapely import wkt
@@ -27,7 +28,9 @@ DOWNLOAD_RESOLUTION = {  # maps zoom levels to dimensions of a single image (in 
 IMAGE_SIZE = (512, 512)
 
 
-@app.task()
+@app.task(
+    queue=queues.FETCH_DATA_BULK,
+)
 def fetch_data_from_arcgis_api():
 
     layer = models.{{ cookiecutter.model_name }}.objects.create()
@@ -42,7 +45,9 @@ def fetch_data_from_arcgis_api():
                 fetch_data_from_arcgis_api_single_image.delay(layer_id=layer.id, bounds_wkt=bounds.wkt, min_zoom, max_zoom)
 
 
-@app.task()
+@app.task(
+    queue=queues.FETCH_DATA_SINGLE_IMAGE,
+)
 def fetch_data_from_arcgis_api_single_image(layer_id: int, bounds_wkt: str, min_zoom: int, max_zoom:int):
     base_layer_url = {{ cookiecutter.base_layer_url | literal}}
     client = ArcGisClient(base_layer_url)

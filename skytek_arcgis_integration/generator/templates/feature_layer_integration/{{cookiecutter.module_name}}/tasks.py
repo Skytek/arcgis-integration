@@ -2,13 +2,16 @@
 {%- set celery_app = cookiecutter.celery_app.split(".")[-1] -%}
 from {{ celery_app_module }} import {{ celery_app }}{% if celery_app != "app" %} as app{% endif %}
 from . import models
+from . import queues
 from skytek_arcgis_integration.client import ArcGisClient
 from shapely import wkt
 from typing import Optional
 from shapely.geometry import box
 
 
-@app.task()
+@app.task(
+    queue=queues.FETCH_DATA_BULK,
+)
 def fetch_data_from_arcgis_api():
     longitude_step = 60
     latitude_step = 30
@@ -19,7 +22,9 @@ def fetch_data_from_arcgis_api():
             fetch_data_from_arcgis_api_single_chunk.delay(bounds_wkt=bounds.wkt)
 
 
-@app.task()
+@app.task(
+    queue=queues.FETCH_DATA_CHUNK,
+)
 def fetch_data_from_arcgis_api_single_chunk(bounds_wkt: Optional[str]=None, where: Optional[str]=None):
     base_layer_url = {{ cookiecutter.base_layer_url | literal}}
     client = ArcGisClient(base_layer_url)
@@ -38,7 +43,9 @@ def fetch_data_from_arcgis_api_single_chunk(bounds_wkt: Optional[str]=None, wher
         store_fetched_data_from_arcgis.delay(feature)
 
 
-@app.task()
+@app.task(
+    queue=queues.STORE_DATA_CHUNK,
+)
 def store_fetched_data_from_arcgis(feature_dict):
     obj = models.{{ cookiecutter.model_name }}.from_api_payload(feature_dict)
     if models.{{ cookiecutter.model_name }}.objects.filter(unique_id=obj.unique_id).exists():
