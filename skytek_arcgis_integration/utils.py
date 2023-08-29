@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional, Type
+from typing import Any, Generator, Optional, Tuple, Type
 
 from dateutil.parser import parse
 from django.contrib.gis.geos import (
@@ -9,6 +9,8 @@ from django.contrib.gis.geos import (
     Point,
     Polygon,
 )
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import box
 
 
 def is_numeric(value):
@@ -48,3 +50,28 @@ def ensure_geometry(
     raise ValueError(
         f"Don't know how to convert {value.__class__.__name__} to {expected_class.__name__}"
     )
+
+
+def divide_rectangle(
+    polygon: ShapelyPolygon, dimensions: Tuple[int, int]
+) -> Generator[ShapelyPolygon, None, None]:
+    dim_x, dim_y = dimensions
+    min_x, min_y, max_x, max_y = polygon.bounds
+    step_x = (max_x - min_x) / dim_x
+    step_y = (max_y - min_y) / dim_y
+
+    for x in range(dim_x + 1):
+        for y in range(dim_y + 1):
+            yield box(
+                min_x + step_x * x,
+                min_y + step_y * y,
+                min_x + step_x * (x + 1),
+                min_y + step_y * (y + 1),
+            )
+
+
+def float_range(start: float, end: float, step: float) -> Generator[float, None, None]:
+    curr = start
+    while curr < end:
+        yield curr
+        curr += step

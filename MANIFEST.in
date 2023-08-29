@@ -1,6 +1,7 @@
 include skytek_arcgis_integration/VERSION
 recursive-include requirements *.txt
-recursive-include skytek_arcgis_integration/generator/integration_template *.*
+recursive-include skytek_arcgis_integration/generator/feature_layer_integration_template *.*
+recursive-include skytek_arcgis_integration/generator/raster_layer_integration_template *.*
 
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
